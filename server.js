@@ -9,6 +9,7 @@ const passport = require('passport')
 const initializePassport = require('./passport-config')
 const flash = require('express-flash')
 const session = require('express-session')
+const methodOverride = require('method-override')
 
 initializePassport(
 	passport,
@@ -29,9 +30,11 @@ app.use(
 )
 app.use(passport.initialize())
 app.use(passport.session())
+app.use(methodOverride('_method'))
 
 app.post(
 	'/login',
+	checkNotAuthenticated,
 	passport.authenticate('local', {
 		successRedirect: '/',
 		failureRedirect: '/login',
@@ -40,7 +43,7 @@ app.post(
 )
 
 //Настройка записи регистрации пользователя
-app.post('/register', async (req, res) => {
+app.post('/register', checkNotAuthenticated, async (req, res) => {
 	try {
 		const hashedPassword = await bcrypt.hash(req.body.password, 10)
 		users.push({
@@ -57,16 +60,37 @@ app.post('/register', async (req, res) => {
 })
 
 // Routers
-app.get('/', (req, res) => {
-	res.render('index.ejs')
+app.get('/', checkAuthenticated, (req, res) => {
+	res.render('index.ejs', { name: req.user.name })
 })
 
-app.get('/login', (req, res) => {
+app.get('/login', checkNotAuthenticated, (req, res) => {
 	res.render('login.ejs')
 })
 
-app.get('/register', (req, res) => {
+app.get('/register', checkNotAuthenticated, (req, res) => {
 	res.render('register.ejs')
 })
+
+app.delete('/logout', (req, res) => {
+	req.logout(req.user, err => {
+		if (err) return next(err)
+		res.redirect('/')
+	})
+})
+
+function checkAuthenticated(req, res, next) {
+	if (req.isAuthenticated()) {
+		return next()
+	}
+	res.redirect('/login')
+}
+
+function checkNotAuthenticated(req, res, next) {
+	if (req.isAuthenticated()) {
+		return res.redirect('/')
+	}
+	next()
+}
 
 app.listen(3000, () => console.log('Server started on port 3000'))
